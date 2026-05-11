@@ -251,14 +251,52 @@
 
 </div>
 <script>
-// ── 설정 ────────────────────────────────────────
-// ★ 아래 URL을 본인 GitHub Pages 주소로 바꿔주세요
-const JSON_URL = "https://[YOUR-USERNAME].github.io/[YOUR-REPO]/savings.json";
-const POLL_MS  = 10 * 60 * 1000;   // 10분마다 JSON 폴링
+const JSON_URL  = "https://cupucharm.github.io/my-savings-alert/savings.json";
+const PAGE_URL  = "https://cupucharm.github.io/my-savings-alert/";
+const POLL_MS   = 10 * 60 * 1000;
 
 let watching = false;
-let pollId   = null;
+let sw = null;  // Service Worker 등록 객체
+let pollId = null;
 let seenAlerts = new Set(JSON.parse(localStorage.getItem("seenAlerts") || "[]"));
+
+// ── Service Worker 등록 ───────────────────────
+async function initSW() {
+  if (!("serviceWorker" in navigator)) {
+    log("wrn", "이 브라우저는 Service Worker를 지원하지 않아요. 탭을 열어두세요.");
+    return false;
+  }
+  try {
+    const reg = await navigator.serviceWorker.register("./sw.js");
+    await navigator.serviceWorker.ready;
+    sw = reg;
+    log("ok", "Service Worker 등록 완료 — 탭 닫아도 알림이 와요");
+
+    // SW에서 보낸 폴링 데이터 수신 (탭 열려있을 때 통계 업데이트)
+    navigator.serviceWorker.addEventListener("message", e => {
+      if (e.data.type === "POLL_DATA") updateStats(e.data.payload);
+    });
+    return true;
+  } catch(err) {
+    log("wrn", "Service Worker 등록 실패: " + err.message);
+    return false;
+  }
+}
+
+// SW에 현재 설정 전달
+function sendConfigToSW(start) {
+  if (!sw || !sw.active) return;
+  const eodSettings = JSON.parse(localStorage.getItem("eodSettings") || "{}");
+  sw.active.postMessage({
+    type: "SET_CONFIG",
+    payload: {
+      jsonUrl: JSON_URL,
+      pageUrl: PAGE_URL,
+      eod: eodSettings
+    }
+  });
+  if (start) sw.active.postMessage({ type: "START_POLL" });
+}
 
 // ── 알림 권한 ─────────────────────────────────
 function checkPerm() {
@@ -279,42 +317,41 @@ async function askPerm() {
 function toggleWatch() {
   watching ? stop() : start();
 }
-function start() {
+async function start() {
   if (Notification.permission !== "granted") { log("wrn", "먼저 알림을 허용해주세요!"); return; }
   watching = true;
   document.getElementById("mainBtn").textContent = "■ 알림 중지";
   document.getElementById("mainBtn").classList.add("stop");
   setStatus(true);
-  log("ok", "모니터링 시작 — GitHub Actions 결과를 폴링합니다");
-  poll();
-  pollId = setInterval(poll, POLL_MS);
+
+  const swOk = await initSW();
+  if (swOk) {
+    sendConfigToSW(true);
+  } else {
+    // SW 미지원 시 기존 폴링으로 폴백
+    log("inf", "기존 폴링 방식으로 동작합니다 (탭 열어두세요)");
+    poll();
+    pollId = setInterval(poll, POLL_MS);
+  }
 }
 function stop() {
   watching = false;
   clearInterval(pollId);
+  if (sw && sw.active) sw.active.postMessage({ type: "STOP_POLL" });
   document.getElementById("mainBtn").textContent = "▶ 알림 시작";
   document.getElementById("mainBtn").classList.remove("stop");
   setStatus(false);
   log("inf", "모니터링 중지됨");
 }
 
-// ── savings.json 폴링 ─────────────────────────
+// ── savings.json 폴링 (SW 미지원 폴백) ────────
 async function poll() {
   log("inf", "savings.json 확인 중...");
   try {
     const res  = await fetch(JSON_URL + "?t=" + Date.now());
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-
-    // 통계 업데이트
-    document.getElementById("cntProd").textContent  = (data.products || []).length;
-    document.getElementById("cntAlert").textContent = (data.alerts   || []).length;
-    const upd = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {hour:"2-digit",minute:"2-digit"}) : "–";
-    document.getElementById("lastCheck").textContent = upd;
-
-    log("ok", `${(data.products||[]).length}개 상품 확인 완료 (업데이트: ${upd})`);
-
-    // 알림 처리
+    updateStats(data);
     for (const alert of (data.alerts || [])) {
       const key = alert.product.id + alert.type;
       if (seenAlerts.has(key)) continue;
@@ -329,13 +366,31 @@ async function poll() {
   }
 }
 
+function updateStats(data) {
+  document.getElementById("cntProd").textContent  = (data.products || []).length;
+  document.getElementById("cntAlert").textContent = (data.alerts   || []).length;
+  const upd = data.updatedAt
+    ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {hour:"2-digit", minute:"2-digit"})
+    : "–";
+  document.getElementById("lastCheck").textContent = upd;
+  log("ok", `${(data.products||[]).length}개 상품 확인 완료 (업데이트: ${upd})`);
+
+  // 탭 열려있을 때 카드도 표시
+  for (const alert of (data.alerts || [])) {
+    const key = alert.product.id + alert.type;
+    if (seenAlerts.has(key)) continue;
+    seenAlerts.add(key);
+    localStorage.setItem("seenAlerts", JSON.stringify([...seenAlerts]));
+    showCard(alert);
+  }
+}
+
 // ── 카드 표시 ─────────────────────────────────
 function showCard(alert) {
   const p    = alert.product;
   const area = document.getElementById("cards");
   const empty = area.querySelector(".empty");
   if (empty) empty.remove();
-
   const isNew = alert.type === "new";
   const div = document.createElement("div");
   div.className = "card " + (isNew ? "is-new" : "is-rate");
@@ -351,15 +406,14 @@ function showCard(alert) {
   log(isNew ? "ok" : "wrn", `${isNew ? "🆕 신규" : "📈 금리↑"}: ${p.bank} ${p.name} ${p.maxRate}%`);
 }
 
-// ── 크롬 푸시 알림 ────────────────────────────
+// ── 크롬 푸시 알림 (폴백용) ───────────────────
 function sendNoti(alert) {
   if (Notification.permission !== "granted") return;
-  const p      = alert.product;
-  const isNew  = alert.type === "new";
-  const title  = isNew ? "🆕 특판적금 신규 출시" : "📈 특판적금 금리 상승";
-  const body   = `${p.bank} ${p.name}\n최고 ${p.maxRate}% (세전)`;
-  new Notification(title, {
-    body, requireInteraction: true, tag: "savings-" + p.id,
+  const p     = alert.product;
+  const isNew = alert.type === "new";
+  new Notification(isNew ? "🆕 특판적금 신규 출시" : "📈 특판적금 금리 상승", {
+    body: `${p.bank} ${p.name}\n최고 ${p.maxRate}% (세전)`,
+    requireInteraction: true, tag: "savings-" + p.id,
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>"
   });
 }
@@ -392,22 +446,17 @@ function log(type, msg) {
   area.scrollTop = area.scrollHeight;
 }
 
-checkPerm();
-loadEodSettings();
-
-// ── 퇴근 알림 설정 저장/불러오기 ────────────
+// ── 퇴근 알림 설정 ────────────────────────────
 function loadEodSettings() {
   const s = JSON.parse(localStorage.getItem("eodSettings") || "{}");
   document.getElementById("eodEnabled").checked = s.enabled || false;
   document.getElementById("eodTime").value = s.time || "17:30";
   const days = s.days || [1,2,3,4,5];
   document.querySelectorAll(".day-btn").forEach(btn => {
-    const d = parseInt(btn.dataset.d);
-    btn.classList.toggle("on", days.includes(d));
+    btn.classList.toggle("on", days.includes(parseInt(btn.dataset.d)));
   });
   updateEodRowState();
 }
-
 function saveEodSettings() {
   const days = [...document.querySelectorAll(".day-btn.on")].map(b => parseInt(b.dataset.d));
   const s = {
@@ -417,9 +466,10 @@ function saveEodSettings() {
   };
   localStorage.setItem("eodSettings", JSON.stringify(s));
   updateEodRowState();
+  // 이미 SW 등록된 상태면 설정 즉시 업데이트
+  sendConfigToSW(false);
   log("inf", `퇴근 알림 ${s.enabled ? s.time + " 설정됨" : "꺼짐"}`);
 }
-
 function updateEodRowState() {
   const on = document.getElementById("eodEnabled").checked;
   ["eodTimeRow","eodDayRow"].forEach(id => {
@@ -427,79 +477,13 @@ function updateEodRowState() {
     document.getElementById(id).style.pointerEvents = on ? "auto" : "none";
   });
 }
-
 function toggleDay(btn) {
   btn.classList.toggle("on");
   saveEodSettings();
 }
 
-// ── 퇴근 알림 타이머 ──────────────────────
-setInterval(() => {
-  const s = JSON.parse(localStorage.getItem("eodSettings") || "{}");
-  if (!s.enabled) return;
-  if (Notification.permission !== "granted") return;
-
-  const now = new Date();
-  const days = s.days || [1,2,3,4,5];
-  if (!days.includes(now.getDay())) return;
-
-  const [h, m] = (s.time || "17:30").split(":").map(Number);
-  if (now.getHours() !== h || now.getMinutes() !== m) return;
-
-  // 오늘 이미 보냈으면 스킵
-  const todayKey = "eodSent_" + now.toDateString();
-  if (localStorage.getItem(todayKey)) return;
-  localStorage.setItem(todayKey, "1");
-
-  // 저장된 상품 목록으로 요약 알림
-  fetch(JSON_URL + "?t=" + Date.now())
-    .then(r => r.json())
-    .then(data => {
-      const products = (data.products || []).sort((a,b) => b.maxRate - a.maxRate);
-      const todayAlerts = (data.alertLog || []).filter(a => {
-        if (!a.detectedAt) return false;
-        const d = new Date(a.detectedAt);
-        return d.toDateString() === now.toDateString();
-      });
-      const icon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>";
-
-      // 케이스 1: 추적 상품 자체가 없음
-      if (products.length === 0) {
-        new Notification("📋 오늘의 특판적금", {
-          body: "오늘은 조건에 맞는 특판적금이 없었어요.",
-          tag: "eod-summary", icon
-        });
-        log("inf", "퇴근 알림: 오늘 추적 상품 없음");
-        return;
-      }
-
-      // 케이스 2: 오늘 새로 감지된 게 있음
-      if (todayAlerts.length > 0) {
-        const newOnes = todayAlerts.filter(a => a.type === "new");
-        const rateUps = todayAlerts.filter(a => a.type === "rate_up");
-        const lines = [];
-        if (newOnes.length) lines.push(`🆕 신규 ${newOnes.length}건: ${newOnes.slice(0,2).map(a=>`${a.bank} ${a.maxRate}%`).join(", ")}`);
-        if (rateUps.length) lines.push(`📈 금리↑ ${rateUps.length}건: ${rateUps.slice(0,2).map(a=>`${a.bank} ${a.maxRate}%`).join(", ")}`);
-        const top = products.slice(0,2).map(p=>`${p.bank} ${p.name} ${p.maxRate}%`).join("\n");
-        new Notification(`📋 오늘 특판 감지 ${todayAlerts.length}건!`, {
-          body: lines.join("\n") + "\n\n금리 TOP: " + top,
-          requireInteraction: true, tag: "eod-summary", icon
-        });
-        log("ok", `퇴근 알림: 오늘 ${todayAlerts.length}건 감지 요약`);
-        return;
-      }
-
-      // 케이스 3: 오늘 새로 감지된 건 없지만 추적 중인 상품은 있음
-      const top3 = products.slice(0,3).map(p=>`${p.bank} ${p.name} ${p.maxRate}%`).join("\n");
-      const more = products.length > 3 ? `\n외 ${products.length - 3}개` : "";
-      new Notification(`📋 오늘 새 소식 없음 — 현재 ${products.length}개 추적 중`, {
-        body: "오늘 신규 출시나 금리 변동은 없었어요.\n\n현재 금리 TOP:\n" + top3 + more,
-        tag: "eod-summary", icon
-      });
-      log("inf", `퇴근 알림: 오늘 변동 없음, 추적 중 ${products.length}개`);
-    })
-    .catch(() => log("err", "퇴근 알림 전송 실패"));
-}, 60 * 1000); // 매분 체크
+checkPerm();
+loadEodSettings();
 </script>
 </body>
 </html>
