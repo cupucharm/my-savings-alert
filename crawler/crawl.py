@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 KST = timezone(timedelta(hours=9))
 MIN_RATE = float(os.getenv("MIN_RATE", "4.0"))   # 최소 금리 기준 (환경변수로 변경 가능)
-OUT_FILE = "savings.json"
+OUT_FILE = "docs/savings.json"
 
 # ─────────────────────────────────────────────────────────────────────
 # 1. 금융감독원 API (적립식 예금 = 적금)
