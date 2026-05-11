@@ -456,24 +456,47 @@ setInterval(() => {
     .then(r => r.json())
     .then(data => {
       const products = (data.products || []).sort((a,b) => b.maxRate - a.maxRate);
+      const todayAlerts = (data.alertLog || []).filter(a => {
+        if (!a.detectedAt) return false;
+        const d = new Date(a.detectedAt);
+        return d.toDateString() === now.toDateString();
+      });
+      const icon = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>";
+
+      // 케이스 1: 추적 상품 자체가 없음
       if (products.length === 0) {
         new Notification("📋 오늘의 특판적금", {
-          body: "오늘은 추적된 특판적금이 없습니다.",
-          tag: "eod-summary"
+          body: "오늘은 조건에 맞는 특판적금이 없었어요.",
+          tag: "eod-summary", icon
         });
+        log("inf", "퇴근 알림: 오늘 추적 상품 없음");
         return;
       }
-      const top3 = products.slice(0, 3).map(p => `${p.bank} ${p.name} ${p.maxRate}%`).join("
-");
-      const more = products.length > 3 ? `
-외 ${products.length - 3}개` : "";
-      new Notification(`📋 오늘의 특판적금 — 총 ${products.length}개`, {
-        body: top3 + more,
-        requireInteraction: true,
-        tag: "eod-summary",
-        icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>"
+
+      // 케이스 2: 오늘 새로 감지된 게 있음
+      if (todayAlerts.length > 0) {
+        const newOnes = todayAlerts.filter(a => a.type === "new");
+        const rateUps = todayAlerts.filter(a => a.type === "rate_up");
+        const lines = [];
+        if (newOnes.length) lines.push(`🆕 신규 ${newOnes.length}건: ${newOnes.slice(0,2).map(a=>`${a.bank} ${a.maxRate}%`).join(", ")}`);
+        if (rateUps.length) lines.push(`📈 금리↑ ${rateUps.length}건: ${rateUps.slice(0,2).map(a=>`${a.bank} ${a.maxRate}%`).join(", ")}`);
+        const top = products.slice(0,2).map(p=>`${p.bank} ${p.name} ${p.maxRate}%`).join("\n");
+        new Notification(`📋 오늘 특판 감지 ${todayAlerts.length}건!`, {
+          body: lines.join("\n") + "\n\n금리 TOP: " + top,
+          requireInteraction: true, tag: "eod-summary", icon
+        });
+        log("ok", `퇴근 알림: 오늘 ${todayAlerts.length}건 감지 요약`);
+        return;
+      }
+
+      // 케이스 3: 오늘 새로 감지된 건 없지만 추적 중인 상품은 있음
+      const top3 = products.slice(0,3).map(p=>`${p.bank} ${p.name} ${p.maxRate}%`).join("\n");
+      const more = products.length > 3 ? `\n외 ${products.length - 3}개` : "";
+      new Notification(`📋 오늘 새 소식 없음 — 현재 ${products.length}개 추적 중`, {
+        body: "오늘 신규 출시나 금리 변동은 없었어요.\n\n현재 금리 TOP:\n" + top3 + more,
+        tag: "eod-summary", icon
       });
-      log("ok", `퇴근 알림 전송: 상품 ${products.length}개 요약`);
+      log("inf", `퇴근 알림: 오늘 변동 없음, 추적 중 ${products.length}개`);
     })
     .catch(() => log("err", "퇴근 알림 전송 실패"));
 }, 60 * 1000); // 매분 체크
