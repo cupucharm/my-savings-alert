@@ -14,11 +14,35 @@ from datetime import datetime, timezone, timedelta
 
 # ── 설정 ──────────────────────────────────────
 SAVINGS_URL  = "https://cupucharm.github.io/my-savings-alert/savings.json"
+SETTINGS_URL = "https://cupucharm.github.io/my-savings-alert/settings.json"
 STATE_FILE   = os.path.expanduser("~/.savings_alert_state.json")
-EOD_HOUR     = 17   # 퇴근 알림 시각 (시)
-EOD_MINUTE   = 30   # 퇴근 알림 시각 (분)
-EOD_DAYS     = [0, 1, 2, 3, 4]  # 0=월 ~ 4=금 (weekday 기준)
 KST          = timezone(timedelta(hours=9))
+
+# 웹앱에서 settings.json으로 설정을 받아옴
+# 없으면 아래 기본값 사용
+DEFAULT_SETTINGS = {
+    "notiMode": "mac",   # chrome / mac / both / none
+    "eod": {
+        "enabled": True,
+        "mode":    "mac",   # chrome / mac / both
+        "time":    "17:30",
+        "days":    [1, 2, 3, 4, 5]  # 1=월 ~ 5=금 (JS 요일 기준)
+    }
+}
+
+def load_settings():
+    try:
+        req = urllib.request.Request(
+            SETTINGS_URL + "?t=" + str(int(datetime.now().timestamp())),
+            headers={"User-Agent": "savings-alert-mac/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as res:
+            s = json.loads(res.read().decode())
+            print(f"[설정] 웹앱 settings.json 로드 완료")
+            return s
+    except Exception:
+        print(f"[설정] settings.json 없음 → 기본값 사용")
+        return DEFAULT_SETTINGS
 
 # ── Mac 알림 전송 ──────────────────────────────
 def notify(title, message, subtitle=""):
@@ -57,7 +81,7 @@ def save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 # ── 신규/금리변동 알림 ─────────────────────────
-def check_alerts(data, state):
+def check_alerts(data, state, mode="mac"):
     seen  = set(state.get("seen", []))
     fired = False
 
@@ -91,14 +115,25 @@ def check_alerts(data, state):
     state["seen"] = list(seen)
 
 # ── 퇴근 요약 알림 ────────────────────────────
-def check_eod(data, state):
-    now = datetime.now(KST)
+def check_eod(data, state, cfg=None):
+    if cfg is None:
+        cfg = DEFAULT_SETTINGS["eod"]
+    if not cfg.get("enabled", True):
+        print("[퇴근알림] 꺼짐")
+        return
 
-    # 요일 체크 (weekday: 0=월 ~ 6=일)
-    if now.weekday() not in EOD_DAYS:
+    now = datetime.now(KST)
+    eod_time = cfg.get("time", "17:30")
+    eod_h, eod_m = map(int, eod_time.split(":"))
+    # JS 요일(1=월~5=금) → Python weekday(0=월~4=금) 변환
+    js_days = cfg.get("days", [1,2,3,4,5])
+    py_days = [(d - 1) % 7 for d in js_days]
+
+    # 요일 체크
+    if now.weekday() not in py_days:
         return
     # 시각 체크
-    if now.hour != EOD_HOUR or now.minute != EOD_MINUTE:
+    if now.hour != eod_h or now.minute != eod_m:
         return
     # 오늘 이미 보냈으면 스킵
     today = now.strftime("%Y-%m-%d")
@@ -143,13 +178,25 @@ def main():
     now = datetime.now(KST)
     print(f"[{now.strftime('%Y-%m-%d %H:%M')} KST] 실행 시작")
 
+    # 웹앱 설정 로드
+    settings = load_settings()
+    noti_mode = settings.get("notiMode", "mac")
+    eod_cfg   = settings.get("eod", DEFAULT_SETTINGS["eod"])
+
+    # notiMode가 none이면 신규/금리 알림 건너뜀
+    if noti_mode == "none":
+        print("[설정] 신규·금리 알림 꺼짐")
+
     data = fetch_savings()
     if not data:
         return
 
     state = load_state()
-    check_alerts(data, state)
-    check_eod(data, state)
+
+    if noti_mode != "none":
+        check_alerts(data, state, noti_mode)
+
+    check_eod(data, state, eod_cfg)
     save_state(state)
     print("완료")
 

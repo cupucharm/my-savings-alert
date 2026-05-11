@@ -1,0 +1,9 @@
+{
+  "notiMode": "mac",
+  "eod": {
+    "enabled": true,
+    "mode": "mac",
+    "time": "17:30",
+    "days": [1, 2, 3, 4, 5]
+  }
+}
