@@ -272,12 +272,7 @@
       </div>
     </div>
 
-    <!-- 저장 버튼 -->
-    <div style="padding-top:14px">
-      <button onclick="publishSettings()" style="width:100%;padding:11px;border-radius:10px;border:1px solid rgba(74,222,128,.4);background:rgba(74,222,128,.08);color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s">
-        ✓ 설정 저장 (mac_alert.py에 반영)
-      </button>
-    </div>
+
   </div>
 
   <!-- 감지 카드 -->
@@ -543,56 +538,7 @@ function toggleDay(btn) {
   saveAllSettings();
 }
 
-// ── 설정을 settings.json으로 GitHub에 저장 ────
-// mac_alert.py가 이 파일을 읽어서 적용
-async function publishSettings() {
-  const s = JSON.parse(localStorage.getItem("allSettings") || "{}");
-  const json = JSON.stringify(s, null, 2);
 
-  // GitHub API로 docs/settings.json 업데이트
-  const GITHUB_USER = "cupucharm";
-  const GITHUB_REPO = "my-savings-alert";
-  const FILE_PATH   = "docs/settings.json";
-  const token = localStorage.getItem("ghToken");
-
-  if (!token) {
-    const t = prompt("GitHub Personal Access Token을 입력해주세요\n(Settings → Developer settings → Tokens → 권한: Contents write)");
-    if (!t) return;
-    localStorage.setItem("ghToken", t);
-  }
-
-  try {
-    // 현재 파일 SHA 가져오기 (업데이트에 필요)
-    const getRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`, {
-      headers: { Authorization: "token " + localStorage.getItem("ghToken") }
-    });
-    const sha = getRes.ok ? (await getRes.json()).sha : undefined;
-
-    // 파일 업데이트
-    const putRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`, {
-      method: "PUT",
-      headers: {
-        Authorization: "token " + localStorage.getItem("ghToken"),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        message: "chore: 알림 설정 업데이트",
-        content: btoa(unescape(encodeURIComponent(json))),
-        ...(sha ? { sha } : {})
-      })
-    });
-
-    if (putRes.ok) {
-      log("ok", "✓ settings.json 저장 완료 — mac_alert.py가 다음 실행 시 반영해요");
-    } else {
-      const err = await putRes.json();
-      log("err", "저장 실패: " + (err.message || putRes.status));
-      if (putRes.status === 401) localStorage.removeItem("ghToken");
-    }
-  } catch(e) {
-    log("err", "GitHub 저장 실패: " + e.message);
-  }
-}
 
 checkPerm();
 loadAllSettings();
