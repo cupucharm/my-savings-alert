@@ -114,6 +114,42 @@
   .empty { text-align:center; padding:36px 0; color:var(--muted); font-size:13px; line-height:1.8; }
   .empty-ico { font-size:28px; margin-bottom:10px; opacity:.35; }
 
+  /* 설정 패널 */
+  .setting-panel {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:12px; padding:20px 22px; margin-bottom:28px;
+  }
+  .setting-row {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:10px 0; border-bottom:1px solid rgba(42,42,58,.5);
+  }
+  .setting-row:last-child { border-bottom:none; padding-bottom:0; }
+  .setting-row:first-child { padding-top:0; }
+  .setting-label { font-size:13px; color:var(--text); }
+  .setting-sub { font-size:11px; color:var(--muted); margin-top:3px; }
+  .toggle { position:relative; width:40px; height:22px; cursor:pointer; flex-shrink:0; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .toggle-track {
+    position:absolute; inset:0; background:var(--surface2);
+    border:1px solid var(--border); border-radius:100px; transition:all .25s;
+  }
+  .toggle-thumb {
+    position:absolute; top:3px; left:3px; width:14px; height:14px;
+    background:var(--muted); border-radius:50%; transition:all .25s; pointer-events:none;
+  }
+  .toggle input:checked ~ .toggle-track { background:rgba(74,222,128,.15); border-color:rgba(74,222,128,.5); }
+  .toggle input:checked ~ .toggle-thumb { transform:translateX(18px); background:var(--accent); }
+  .time-input {
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-family:var(--mono); font-size:15px;
+    padding:7px 12px; outline:none; width:110px; color-scheme:dark;
+    transition:border-color .2s;
+  }
+  .time-input:focus { border-color:rgba(74,222,128,.5); }
+  .time-row { display:flex; align-items:center; gap:10px; }
+  .time-sep { color:var(--muted); font-family:var(--mono); }
+  .setting-disabled { opacity:.4; pointer-events:none; }
+
   /* 로그 */
   .log {
     background:var(--surface); border:1px solid var(--border); border-radius:12px;
@@ -124,6 +160,12 @@
   .log-line:last-child { border-bottom:none; }
   .lt { color:var(--muted); flex-shrink:0; }
   .lok { color:var(--accent); } .linf { color:var(--accent2); } .lwrn { color:var(--warn); } .lerr { color:var(--danger); }
+  .day-btn {
+    padding:5px 10px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface2); color:var(--muted);
+    font-family:var(--mono); font-size:11px; cursor:pointer; transition:all .2s;
+  }
+  .day-btn.on { border-color:rgba(74,222,128,.4); background:rgba(74,222,128,.08); color:var(--accent); }
   ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
 </style>
 </head>
@@ -157,6 +199,44 @@
     <button class="btn-sub"  onclick="testNoti()">🔔 테스트 알림</button>
   </div>
 
+  <!-- 퇴근 알림 설정 -->
+  <div class="sec">퇴근 알림 설정</div>
+  <div class="setting-panel">
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">📋 금일 특판적금 요약 알림</div>
+        <div class="setting-sub">퇴근 전 오늘 추적된 특판적금 목록을 한 번에 알려드려요</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="eodEnabled" onchange="saveEodSettings()">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+    <div class="setting-row" id="eodTimeRow">
+      <div>
+        <div class="setting-label">알림 시간</div>
+        <div class="setting-sub">매일 이 시각에 오늘의 특판 목록을 알림으로 보내드려요</div>
+      </div>
+      <input type="time" class="time-input" id="eodTime" value="17:30" onchange="saveEodSettings()">
+    </div>
+    <div class="setting-row" id="eodDayRow">
+      <div>
+        <div class="setting-label">알림 요일</div>
+        <div class="setting-sub">선택한 요일에만 퇴근 알림을 보내드려요</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="day-btn on" data-d="1" onclick="toggleDay(this)">월</button>
+        <button class="day-btn on" data-d="2" onclick="toggleDay(this)">화</button>
+        <button class="day-btn on" data-d="3" onclick="toggleDay(this)">수</button>
+        <button class="day-btn on" data-d="4" onclick="toggleDay(this)">목</button>
+        <button class="day-btn on" data-d="5" onclick="toggleDay(this)">금</button>
+        <button class="day-btn"   data-d="6" onclick="toggleDay(this)">토</button>
+        <button class="day-btn"   data-d="0" onclick="toggleDay(this)">일</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 감지 카드 -->
   <div class="sec">감지된 상품</div>
   <div class="cards" id="cards">
@@ -173,7 +253,7 @@
 <script>
 // ── 설정 ────────────────────────────────────────
 // ★ 아래 URL을 본인 GitHub Pages 주소로 바꿔주세요
-const JSON_URL = "https://cupucharm.github.io/my-savings-alert/savings.json";
+const JSON_URL = "https://[YOUR-USERNAME].github.io/[YOUR-REPO]/savings.json";
 const POLL_MS  = 10 * 60 * 1000;   // 10분마다 JSON 폴링
 
 let watching = false;
@@ -313,6 +393,90 @@ function log(type, msg) {
 }
 
 checkPerm();
+loadEodSettings();
+
+// ── 퇴근 알림 설정 저장/불러오기 ────────────
+function loadEodSettings() {
+  const s = JSON.parse(localStorage.getItem("eodSettings") || "{}");
+  document.getElementById("eodEnabled").checked = s.enabled || false;
+  document.getElementById("eodTime").value = s.time || "17:30";
+  const days = s.days || [1,2,3,4,5];
+  document.querySelectorAll(".day-btn").forEach(btn => {
+    const d = parseInt(btn.dataset.d);
+    btn.classList.toggle("on", days.includes(d));
+  });
+  updateEodRowState();
+}
+
+function saveEodSettings() {
+  const days = [...document.querySelectorAll(".day-btn.on")].map(b => parseInt(b.dataset.d));
+  const s = {
+    enabled: document.getElementById("eodEnabled").checked,
+    time:    document.getElementById("eodTime").value,
+    days
+  };
+  localStorage.setItem("eodSettings", JSON.stringify(s));
+  updateEodRowState();
+  log("inf", `퇴근 알림 ${s.enabled ? s.time + " 설정됨" : "꺼짐"}`);
+}
+
+function updateEodRowState() {
+  const on = document.getElementById("eodEnabled").checked;
+  ["eodTimeRow","eodDayRow"].forEach(id => {
+    document.getElementById(id).style.opacity = on ? "1" : "0.4";
+    document.getElementById(id).style.pointerEvents = on ? "auto" : "none";
+  });
+}
+
+function toggleDay(btn) {
+  btn.classList.toggle("on");
+  saveEodSettings();
+}
+
+// ── 퇴근 알림 타이머 ──────────────────────
+setInterval(() => {
+  const s = JSON.parse(localStorage.getItem("eodSettings") || "{}");
+  if (!s.enabled) return;
+  if (Notification.permission !== "granted") return;
+
+  const now = new Date();
+  const days = s.days || [1,2,3,4,5];
+  if (!days.includes(now.getDay())) return;
+
+  const [h, m] = (s.time || "17:30").split(":").map(Number);
+  if (now.getHours() !== h || now.getMinutes() !== m) return;
+
+  // 오늘 이미 보냈으면 스킵
+  const todayKey = "eodSent_" + now.toDateString();
+  if (localStorage.getItem(todayKey)) return;
+  localStorage.setItem(todayKey, "1");
+
+  // 저장된 상품 목록으로 요약 알림
+  fetch(JSON_URL + "?t=" + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      const products = (data.products || []).sort((a,b) => b.maxRate - a.maxRate);
+      if (products.length === 0) {
+        new Notification("📋 오늘의 특판적금", {
+          body: "오늘은 추적된 특판적금이 없습니다.",
+          tag: "eod-summary"
+        });
+        return;
+      }
+      const top3 = products.slice(0, 3).map(p => `${p.bank} ${p.name} ${p.maxRate}%`).join("
+");
+      const more = products.length > 3 ? `
+외 ${products.length - 3}개` : "";
+      new Notification(`📋 오늘의 특판적금 — 총 ${products.length}개`, {
+        body: top3 + more,
+        requireInteraction: true,
+        tag: "eod-summary",
+        icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>"
+      });
+      log("ok", `퇴근 알림 전송: 상품 ${products.length}개 요약`);
+    })
+    .catch(() => log("err", "퇴근 알림 전송 실패"));
+}, 60 * 1000); // 매분 체크
 </script>
 </body>
 </html>
