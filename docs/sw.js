@@ -13,17 +13,25 @@ self.addEventListener('activate', e => {
 });
 
 // ── 메인 페이지에서 메시지 수신 ───────────────
-// index.html이 설정값(JSON_URL, 퇴근 알림 등)을 SW로 전달
 self.addEventListener('message', e => {
   const { type, payload } = e.data || {};
 
   if (type === 'SET_CONFIG') {
-    // 설정 저장
     self._config = payload;
-    console.log('[SW] 설정 수신:', payload);
+    console.log('[SW] 설정 수신:', JSON.stringify(payload));
+    // 설정 받자마자 폴링 시작 (START_POLL 못 받은 경우 대비)
+    if (!_pollTimer) startPolling();
+    else {
+      // 이미 돌고 있으면 퇴근 타이머만 재시작 (설정 변경 반영)
+      clearInterval(_eodTimer);
+      _eodTimer = setInterval(checkEod, 60 * 1000);
+      // 퇴근 알림 설정 바뀌었으면 즉시 한 번 체크
+      checkEod();
+    }
   }
 
   if (type === 'START_POLL') {
+    // SET_CONFIG가 먼저 왔으면 이미 시작됨, 아니면 여기서 시작
     startPolling();
   }
 

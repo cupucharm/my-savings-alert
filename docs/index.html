@@ -268,14 +268,22 @@ async function initSW() {
   }
   try {
     const reg = await navigator.serviceWorker.register("./sw.js");
-    await navigator.serviceWorker.ready;
-    sw = reg;
+    sw = await navigator.serviceWorker.ready;
     log("ok", "Service Worker 등록 완료 — 탭 닫아도 알림이 와요");
 
-    // SW에서 보낸 폴링 데이터 수신 (탭 열려있을 때 통계 업데이트)
+    // SW에서 보낸 폴링 데이터 수신
     navigator.serviceWorker.addEventListener("message", e => {
       if (e.data.type === "POLL_DATA") updateStats(e.data.payload);
     });
+
+    // SW가 새로 activate됐을 때 설정 재전달
+    reg.addEventListener("updatefound", () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener("statechange", () => {
+        if (newWorker.state === "activated") sendConfigToSW(true);
+      });
+    });
+
     return true;
   } catch(err) {
     log("wrn", "Service Worker 등록 실패: " + err.message);
@@ -283,19 +291,17 @@ async function initSW() {
   }
 }
 
-// SW에 현재 설정 전달
+// SW에 현재 설정 전달 — active worker에 직접 postMessage
 function sendConfigToSW(start) {
-  if (!sw || !sw.active) return;
+  const worker = sw ? sw.active : null;
+  if (!worker) { log("wrn", "SW 아직 준비 안 됨"); return; }
   const eodSettings = JSON.parse(localStorage.getItem("eodSettings") || "{}");
-  sw.active.postMessage({
+  worker.postMessage({
     type: "SET_CONFIG",
-    payload: {
-      jsonUrl: JSON_URL,
-      pageUrl: PAGE_URL,
-      eod: eodSettings
-    }
+    payload: { jsonUrl: JSON_URL, pageUrl: PAGE_URL, eod: eodSettings }
   });
-  if (start) sw.active.postMessage({ type: "START_POLL" });
+  if (start) worker.postMessage({ type: "START_POLL" });
+  log("inf", `SW에 설정 전달 완료 (퇴근알림: ${eodSettings.enabled ? eodSettings.time : "꺼짐"})`);
 }
 
 // ── 알림 권한 ─────────────────────────────────
