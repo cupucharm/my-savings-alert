@@ -265,7 +265,7 @@ function sendConfigToSW(start) {
     payload: { jsonUrl: JSON_URL, pageUrl: PAGE_URL, eod: eodSettings }
   });
   if (start) worker.postMessage({ type: "START_POLL" });
-  log("inf", `SW에 설정 전달 완료 (퇴근알림: ${eodSettings.enabled ? eodSettings.time : "꺼짐"})`);
+  log("inf", "SW에 설정 전달 완료");
 }
 
 // ── 알림 권한 ─────────────────────────────────
