@@ -1,0 +1,35 @@
+name: 특판적금 크롤러
+
+on:
+  schedule:
+    # 평일(월~금) 한국시간 9시~18시 → UTC 0시~9시
+    # 매시간 정각 실행
+    - cron: '0 0-9 * * 1-5'
+  workflow_dispatch:  # 수동 실행도 가능
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: pip install requests beautifulsoup4 lxml
+
+      - name: 크롤러 실행
+        run: python crawler/crawl.py
+
+      - name: 결과 커밋 & 푸시
+        run: |
+          git config user.name  "savings-bot"
+          git config user.email "bot@github.com"
+          git add savings.json
+          git diff --cached --quiet || git commit -m "chore: 특판적금 업데이트 $(date +'%Y-%m-%d %H:%M')"
+          git push
