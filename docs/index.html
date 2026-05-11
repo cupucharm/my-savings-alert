@@ -422,6 +422,46 @@ function log(type, msg) {
 
 checkPerm();
 
+// ── 자동 재개 ─────────────────────────────────
+async function autoResume() {
+  const wasWatching = localStorage.getItem("watching") === "true";
+  if (!wasWatching) return;
+
+  if ("serviceWorker" in navigator) {
+    const reg = await navigator.serviceWorker.getRegistration("./sw.js");
+    if (reg && reg.active) {
+      // SW 이미 살아있음 → UI만 모니터링 중으로 표시
+      watching = true;
+      sw = reg;
+      setStatus(true);
+      document.getElementById("mainBtn").textContent = "■ 알림 중지";
+      document.getElementById("mainBtn").classList.add("stop");
+      navigator.serviceWorker.addEventListener("message", e => {
+        if (e.data.type === "POLL_DATA") updateStats(e.data.payload);
+      });
+      sendConfigToSW(false);
+      log("ok", "✓ 모니터링 중 — SW 백그라운드 실행 확인됨");
+      return;
+    }
+  }
+  // SW 없으면 새로 시작
+  log("inf", "이전 모니터링 감지 — 자동 재시작");
+  start();
+}
+
+// start/stop 시 localStorage에 상태 저장
+const _origStart = start;
+const _origStop  = stop;
+async function start() {
+  localStorage.setItem("watching", "true");
+  await _origStart();
+}
+function stop() {
+  localStorage.setItem("watching", "false");
+  _origStop();
+}
+
+autoResume();
 </script>
 </body>
 </html>
