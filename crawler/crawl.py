@@ -144,16 +144,39 @@ def main():
     if not alerts:
         print("  변동 없음")
 
+    # 이전 알림 로그 불러오기 (누적)
+    prev_log = []
+    if os.path.exists(OUT_FILE):
+        try:
+            saved = json.loads(open(OUT_FILE, encoding="utf-8").read())
+            prev_log = saved.get("alertLog", [])
+        except Exception:
+            pass
+
+    # 새 알림을 로그에 추가 (최대 100건 유지)
+    now_str = datetime.now(KST).isoformat()
+    for alert in alerts:
+        prev_log.append({
+            "detectedAt": now_str,
+            "type":       alert["type"],
+            "bank":       alert["product"]["bank"],
+            "name":       alert["product"]["name"],
+            "maxRate":    alert["product"]["maxRate"],
+            "prevRate":   alert.get("prevRate"),
+        })
+    alert_log = prev_log[-100:]   # 최대 100건
+
     # 저장
     output = {
-        "updatedAt": datetime.now(KST).isoformat(),
+        "updatedAt": now_str,
         "products":  list(merged.values()),
         "alerts":    alerts,
+        "alertLog":  alert_log,
     }
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    print(f"저장 완료 → {OUT_FILE}  ({len(merged)}개 상품, {len(alerts)}건 알림)")
+    print(f"저장 완료 → {OUT_FILE}  ({len(merged)}개 상품, {len(alerts)}건 알림, 누적 로그 {len(alert_log)}건)")
 
 
 if __name__ == "__main__":
