@@ -16,6 +16,12 @@ KST = timezone(timedelta(hours=9))
 MIN_RATE = float(os.getenv("MIN_RATE", "4.0"))   # 최소 금리 기준 (환경변수로 변경 가능)
 OUT_FILE = "docs/savings.json"
 
+# 특판 키워드 — 상품명에 포함되면 isSpecial: True 표시
+SPECIAL_KEYWORDS = ["특판", "한정", "특별", "이벤트", "기념", "출시", "한시", "특가", "우대", "프로모션"]
+
+def is_special(name: str) -> bool:
+    return any(kw in name for kw in SPECIAL_KEYWORDS)
+
 # ─────────────────────────────────────────────────────────────────────
 # 1. 금융감독원 API (적립식 예금 = 적금)
 # ─────────────────────────────────────────────────────────────────────
@@ -46,15 +52,17 @@ def fetch_fss() -> list[dict]:
                 max_rate = rate_map.get(code, 0)
                 if max_rate < MIN_RATE:
                     continue
+                pname = item.get("fin_prdt_nm", "")
                 products.append({
-                    "id":       hashlib.md5(f"{item.get('kor_co_nm')}{item.get('fin_prdt_nm')}".encode()).hexdigest()[:8],
-                    "name":     item.get("fin_prdt_nm", ""),
-                    "bank":     item.get("kor_co_nm", ""),
-                    "maxRate":  max_rate,
-                    "joinWay":  item.get("join_way", ""),
-                    "etcNote":  item.get("etc_note", ""),
-                    "source":   "금융감독원",
-                    "url":      "https://finlife.fss.or.kr",
+                    "id":        hashlib.md5(f"{item.get('kor_co_nm')}{pname}".encode()).hexdigest()[:8],
+                    "name":      pname,
+                    "bank":      item.get("kor_co_nm", ""),
+                    "maxRate":   max_rate,
+                    "joinWay":   item.get("join_way", ""),
+                    "etcNote":   item.get("etc_note", ""),
+                    "source":    "금융감독원",
+                    "url":       "https://finlife.fss.or.kr",
+                    "isSpecial": is_special(pname),
                 })
         except Exception as e:
             print(f"[FSS] 오류: {e}")
@@ -89,15 +97,16 @@ def fetch_kfb() -> list[dict]:
                 continue
 
             products.append({
-                "id":       hashlib.md5(f"{bank}{name}".encode()).hexdigest()[:8],
-                "name":     name,
-                "bank":     bank,
-                "maxRate":  max_rate,
-                "period":   period,
-                "joinWay":  "",
-                "etcNote":  "",
-                "source":   "은행연합회",
-                "url":      url,
+                "id":        hashlib.md5(f"{bank}{name}".encode()).hexdigest()[:8],
+                "name":      name,
+                "bank":      bank,
+                "maxRate":   max_rate,
+                "period":    period,
+                "joinWay":   "",
+                "etcNote":   "",
+                "source":    "은행연합회",
+                "url":       url,
+                "isSpecial": is_special(name),
             })
     except Exception as e:
         print(f"[KFB] 오류: {e}")
@@ -144,6 +153,13 @@ def main():
     if not alerts:
         print("  변동 없음")
 
+    # 특판 키워드 상품 별도 출력
+    specials = [p for p in merged.values() if p.get("isSpecial")]
+    if specials:
+        print(f"  ⭐ 특판 키워드 상품 {len(specials)}개:")
+        for p in specials:
+            print(f"     {p['bank']} {p['name']} {p['maxRate']}%")
+
     # 이전 알림 로그 불러오기 (누적)
     prev_log = []
     if os.path.exists(OUT_FILE):
@@ -163,6 +179,7 @@ def main():
             "name":       alert["product"]["name"],
             "maxRate":    alert["product"]["maxRate"],
             "prevRate":   alert.get("prevRate"),
+            "isSpecial":  alert["product"].get("isSpecial", False),
         })
     alert_log = prev_log[-100:]   # 최대 100건
 

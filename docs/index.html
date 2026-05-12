@@ -364,9 +364,15 @@ function showCard(alert) {
   const isNew = alert.type === "new";
   const div = document.createElement("div");
   div.className = "card " + (isNew ? "is-new" : "is-rate");
+  const specialBadge = p.isSpecial
+    ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:4px;background:rgba(250,204,21,.1);color:#facc15;border:1px solid rgba(250,204,21,.3);margin-left:6px">⭐ 특판</span>`
+    : "";
   div.innerHTML = `
     <div style="flex:1;min-width:0">
-      <div class="badge ${isNew ? "new" : "rate"}">${isNew ? "▲ 신규출시" : "↑ 금리상승"}</div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:7px">
+        <div class="badge ${isNew ? "new" : "rate"}">${isNew ? "▲ 신규출시" : "↑ 금리상승"}</div>
+        ${specialBadge}
+      </div>
       <div class="card-name">${p.name}</div>
       <div class="card-meta">${p.bank}${p.source ? " · " + p.source : ""}${p.period ? " · " + p.period : ""}</div>
     </div>
