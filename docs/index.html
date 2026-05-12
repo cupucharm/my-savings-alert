@@ -202,6 +202,19 @@
 
 
   <!-- 감지 카드 -->
+  <!-- 수집 기준 안내 -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:28px;display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:11px;font-family:var(--mono);color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px">수집 기준</div>
+    <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text);line-height:1.6">
+      <span style="color:var(--accent);flex-shrink:0">①</span>
+      <span>금융감독원 · 은행연합회에서 <strong style="color:var(--accent)">최고금리 4.0% 이상</strong> 적금 상품 전체 수집 <span style="color:var(--muted)">(일반 고금리 상품 포함)</span></span>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text);line-height:1.6">
+      <span style="color:#facc15;flex-shrink:0">②</span>
+      <span>상품명에 <strong style="color:#facc15">특판 · 한정 · 특별 · 이벤트 · 기념 · 출시 · 한시 · 특가 · 우대 · 프로모션</strong> 키워드가 있으면 <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(250,204,21,.1);color:#facc15;border:1px solid rgba(250,204,21,.3)">⭐ 특판</span> 뱃지 표시</span>
+    </div>
+  </div>
+
   <div class="sec">감지된 상품</div>
   <div class="cards" id="cards">
     <div class="empty"><div class="empty-ico">◎</div>알림 시작 후 새 특판이 감지되면 여기 표시됩니다</div>
