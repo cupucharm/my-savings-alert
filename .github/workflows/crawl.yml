@@ -7,6 +7,9 @@ on:
     - cron: '0 0-9 * * 1-5'
   workflow_dispatch:  # 수동 실행도 가능
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -30,6 +33,6 @@ jobs:
         run: |
           git config user.name  "savings-bot"
           git config user.email "bot@github.com"
-          git add savings.json
+          git add docs/savings.json
           git diff --cached --quiet || git commit -m "chore: 특판적금 업데이트 $(date +'%Y-%m-%d %H:%M')"
           git push
